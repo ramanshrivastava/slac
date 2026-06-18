@@ -1,0 +1,12 @@
+# Pre-commit hooks for SLAC. Install with: pre-commit install
+# The SLAC hook validates every staged .slac.md so a malformed loop never lands.
+repos:
+  - repo: local
+    hooks:
+      - id: slac-lint
+        name: slac lint (validate .slac.md loops)
+        description: Type-check and lint SLAC loop files before commit.
+        entry: python3 linter/slac_lint.py --strict
+        language: system
+        files: '\.slac\.md$'
+        pass_filenames: true

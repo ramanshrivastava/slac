@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slac-lang"
+version = "0.0.1"
+description = "Structured Language for Agentic Coding — a spec and linter for agentic coding loops."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [{ name = "The SLAC Authors" }]
+keywords = ["agents", "agentic", "loops", "okf", "linter", "dsl", "ai"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Quality Assurance",
+]
+# Zero runtime dependencies — the linter runs on a stock Python.
+dependencies = []
+
+[project.optional-dependencies]
+# PyYAML gives maximal YAML coverage; the bundled parser handles the SLAC subset.
+yaml = ["pyyaml>=6"]
+dev = ["pytest>=7", "pyyaml>=6", "pre-commit>=3"]
+
+[project.scripts]
+slac = "slac.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ramanshrivastava/slac"
+Specification = "https://github.com/ramanshrivastava/slac/blob/main/SPEC.md"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+slac = ["slac.schema.json"]

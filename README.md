@@ -69,21 +69,38 @@ stop condition** (`until`) and a **mandatory separate `checker` agent**. In
 compiler terms, the checker is the *type-checker the fuzzy LLM executor took away*,
 moved to runtime. See [SPEC.md](./SPEC.md) for the full rationale.
 
-## Validate a loop ("so agents don't fall flat")
+## Install
 
-The linter is **zero-dependency** — just Python 3.8+. (`pyyaml` is used
-automatically if installed, for maximal YAML coverage; otherwise a bundled
-frontmatter parser is used.)
+The linter is **zero-dependency** — stock Python 3.8+. (`pyyaml` is used
+automatically if present for maximal YAML coverage; otherwise a bundled parser
+handles the SLAC subset.)
 
 ```bash
-# Lint the bundled examples (should pass cleanly)
+# one-line install (wraps pipx)
+curl -fsSL https://raw.githubusercontent.com/ramanshrivastava/slac/main/install.sh | bash
+
+# …or pick a package manager
+pipx install slac-lang          # recommended: isolated CLI on your PATH
+pip install slac-lang           # into the current environment
+
+# …or no install at all — run straight from a clone
 python3 linter/slac_lint.py examples/*.slac.md
+```
 
-# Machine-readable findings an agent can auto-fix
-python3 linter/slac_lint.py --json examples/pr_babysitter.slac.md
+> **Distribution status (v0.0.1):** the package is built for **PyPI** as
+> `slac-lang` (publish-ready via `pyproject.toml`); `pipx`/`pip` are the primary
+> channels and the `curl … | bash` script just wraps `pipx`. A **Homebrew** tap is
+> planned once there's a tagged release. Nothing is published yet — these are the
+> targets, and `install.sh` already installs from a local clone today.
 
-# CI mode: warnings become errors
-python3 linter/slac_lint.py --strict examples/*.slac.md
+## Use the `slac` CLI
+
+```bash
+slac lint examples/*.slac.md              # validate (type-check + lint)
+slac lint --json my_loop.slac.md          # machine-readable findings (agents auto-fix the `safe` ones)
+slac lint --strict examples/*.slac.md     # CI mode: warnings become errors
+slac new my_loop                          # scaffold a starter loop that lints clean
+slac explain NoCheckerWarning             # what a diagnostic means (or list them all)
 ```
 
 Diagnostics read like a **Python traceback**, not a barcode — errors are named
@@ -91,23 +108,40 @@ like Python exceptions (`MissingFieldError`, `UnknownFieldError`, `TypeError`)
 and **halt** the loop; warnings (`NoCheckerWarning`, `RunawayWarning`) **notify**
 but let it run. See [linter/rules.md](./linter/rules.md).
 
+## Use it from an agent
+
+A `.slac.md` is a loop *definition*; an agent harness *runs* it. The bundled
+[Claude Code skill](./integrations/claude-code/SKILL.md) teaches an agent to
+consume one: validate with `slac lint`, then drive the loop (fetch context → run
+the maker → run a **separate** checker → evaluate `until` → repeat) by lowering
+onto `/loop`. Drop it in `~/.claude/skills/run-slac-loop/` and say *"run this
+loop."* See [`mappings/`](./mappings) for the field-by-field lowering onto Claude
+Code `/loop` and Codex `/goal`.
+
 ## Repository layout
 
 ```
 slac/
-  SPEC.md                 the language definition (fields, semantics, lifecycle)
-  schema/slac.schema.json JSON Schema for the frontmatter (the type-check)
-  linter/
-    slac_lint.py          zero-dependency validator (OKF → schema → semantic)
-    rules.md              every diagnostic, with rationale
+  SPEC.md                    the language definition (fields, semantics, lifecycle)
+  pyproject.toml             packaging — installs the `slac` CLI
+  src/slac/
+    cli.py                   the `slac` command (lint / new / explain)
+    linter.py                zero-dependency validator (OKF → schema → semantic)
+    slac.schema.json         JSON Schema for the frontmatter (the type-check)
+  linter/slac_lint.py        back-compat shim (zero-install entry point)
+  linter/rules.md            every diagnostic, with rationale
+  tests/test_linter.py       the test suite (stdlib unittest)
   examples/
-    index.md              OKF directory index (the "loopbook")
+    index.md                 OKF directory index (the "loopbook")
     pr_babysitter.slac.md
     bug_fixer.slac.md
     flaky_hunter.slac.md
   mappings/
-    claude-code.md        how SLAC lowers onto /loop
-    codex.md              how SLAC lowers onto /goal
+    claude-code.md           how SLAC lowers onto /loop
+    codex.md                 how SLAC lowers onto /goal
+  integrations/
+    claude-code/SKILL.md     skill: teach an agent to run a .slac.md loop
+  Makefile  .pre-commit-config.yaml
 ```
 
 ## Relationship to OKF

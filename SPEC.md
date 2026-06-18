@@ -3,8 +3,8 @@
 **Structured Language for Agentic Coding**
 
 > Status: draft (v0.0.1). The language is small on purpose. This document is the
-> normative reference; the JSON Schema (`schema/slac.schema.json`) and the linter
-> (`linter/slac_lint.py`) implement it.
+> normative reference; the JSON Schema (`src/slac/slac.schema.json`) and the linter
+> (`src/slac/linter.py`, exposed as `slac lint`) implement it.
 
 ---
 
@@ -30,7 +30,7 @@ This is the same split every programming language has:
 
 SLAC has a compiler, in two halves:
 
-- **Front-end** — `linter/slac_lint.py` + `schema/slac.schema.json`. It parses a
+- **Front-end** — `src/slac/linter.py` (`slac lint`) + `src/slac/slac.schema.json`. It parses a
   loop file, type-checks it, and lints it. This is **deterministic** and runs
   **before** execution (a pre-flight gate). An invalid loop is *refused, not run*.
 - **Back-end** — the `mappings/` documents. They *lower* a validated loop onto a
@@ -209,7 +209,7 @@ The linter runs **three ordered stages and stops at the first hard failure**
 (progressive validation, borrowed from zerolang):
 
 1. **OKF conformance** — the file parses as frontmatter + body and `type` is present.
-2. **Type check** — frontmatter validates against `schema/slac.schema.json`:
+2. **Type check** — frontmatter validates against `src/slac/slac.schema.json`:
    required keys, correct types, enum values, and `additionalProperties: false`.
 3. **Semantic lint** — footguns the schema can't see (§3 `O‡` rows, `until`
    reachability, missing `# Goal` body).
