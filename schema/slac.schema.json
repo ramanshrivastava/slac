@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://slac-lang.dev/schema/slac.schema.json",
+  "title": "SLAC loop frontmatter",
+  "description": "Type-check layer for a .slac.md frontmatter block (SLAC v0.0.1). This is an OKF profile: type is fixed to slac.loop.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "loop", "until", "context", "agents"],
+  "properties": {
+    "type": {
+      "const": "slac.loop",
+      "description": "OKF discriminator. Always slac.loop."
+    },
+    "loop": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Unique loop id, snake_case like a Python module."
+    },
+    "until": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stop condition: a restricted Python boolean expression over signals, or prose."
+    },
+    "context": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The fuel the loop reads each iteration.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "maxProperties": 1,
+            "properties": {
+              "cmd": { "type": "string" },
+              "file": { "type": "string" },
+              "signal": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "okf": { "type": "string" },
+              "mcp": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maker"],
+      "properties": {
+        "maker": { "$ref": "#/$defs/agent" },
+        "checker": { "$ref": "#/$defs/checker" }
+      }
+    },
+    "state": {
+      "type": "string",
+      "description": "Path to on-disk memory between runs. Defaults to sibling log.md."
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "always": { "type": "array", "items": { "type": "string" } },
+        "ask": { "type": "array", "items": { "type": "string" } },
+        "never": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "schedule": {
+      "type": "string",
+      "description": "Cadence: an interval (15m), a word (daily), or a 5-field cron."
+    },
+    "isolation": {
+      "type": "string",
+      "enum": ["none", "worktree"],
+      "description": "Parallel-safety. Default none."
+    },
+    "max_iterations": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Runaway backstop."
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tokens": { "type": "integer", "minimum": 1 },
+        "minutes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "version": {
+      "type": "string",
+      "description": "SLAC version this file targets. Default 0.0.1."
+    },
+    "title": { "type": "string", "description": "OKF: human-readable name." },
+    "description": { "type": "string", "description": "OKF: brief explanation." },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "OKF: categorical tags."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "OKF: ISO 8601 timestamp."
+    }
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": {
+        "model": { "type": "string" },
+        "instructions": { "type": "string" }
+      }
+    },
+    "checker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": {
+        "model": { "type": "string" },
+        "mode": { "type": "string", "enum": ["refute", "confirm"] },
+        "instructions": { "type": "string" }
+      }
+    }
+  }
+}

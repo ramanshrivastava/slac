@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Loop state / memory written by running loops
+**/log.md.lock
+.slac/
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
