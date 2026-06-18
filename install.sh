@@ -4,10 +4,10 @@
 #   curl -fsSL https://raw.githubusercontent.com/ramanshrivastava/slac/main/install.sh | bash
 #
 # Prefers pipx (isolated); falls back to `pip install --user`. If run from a
-# clone, installs that working tree; otherwise installs `slac` from PyPI.
+# clone, installs that working tree; otherwise installs `slac-lang` from PyPI.
 set -euo pipefail
 
-PKG="slac"
+PKG="slac-lang"
 SRC="$PKG"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 if [ -n "$SELF_DIR" ] && [ -f "$SELF_DIR/pyproject.toml" ]; then
