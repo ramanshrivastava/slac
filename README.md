@@ -80,15 +80,15 @@ handles the SLAC subset.)
 curl -fsSL https://raw.githubusercontent.com/ramanshrivastava/slac/main/install.sh | bash
 
 # …or pick a package manager
-pipx install slac-lang          # recommended: isolated CLI on your PATH
-pip install slac-lang           # into the current environment
+pipx install slac          # recommended: isolated CLI on your PATH
+pip install slac           # into the current environment
 
 # …or no install at all — run straight from a clone
 python3 linter/slac_lint.py examples/*.slac.md
 ```
 
 > **Distribution status (v0.0.1):** the package is built for **PyPI** as
-> `slac-lang` (publish-ready via `pyproject.toml`); `pipx`/`pip` are the primary
+> `slac` (publish-ready via `pyproject.toml`); `pipx`/`pip` are the primary
 > channels and the `curl … | bash` script just wraps `pipx`. A **Homebrew** tap is
 > planned once there's a tagged release. Nothing is published yet — these are the
 > targets, and `install.sh` already installs from a local clone today.
