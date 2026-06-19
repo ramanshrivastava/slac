@@ -11,12 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`slac run` — the execution engine (Phase A).** Runs a validated loop directly:
+  pre-flight lint gate → fetch context → maker → **separate** checker → evaluate
+  `until` over the checker's reported signals → append `log.md` → cap check. The
+  default `claude_cli` backend shells out to the user's logged-in `claude` CLI
+  (no API key, no metered billing); `--dry-run` shows the plan without spawning.
+  New modules: `runner.py`, `evaluator.py`, `state.py`, `backends/`.
+- The checker is told the exact dotted signal paths `until` needs (with a nested
+  JSON skeleton), so structured conditions like `answer.value == 42` resolve.
+
 ### Planned
-- `slac run` — a reference **engine** that executes a validated loop directly
-  (fetch context → maker → separate checker → evaluate `until` → repeat), so a
-  `.slac.md` no longer needs a host harness to run.
-- Editor support — syntax highlighting and inline diagnostics for `.slac.md`
-  (language server / extension).
+- Multi-engine: a `codex_cli` backend + a file-lock message bus so the maker and
+  checker can run on different engines at once (cross-engine verification).
+- Language: `params`/variables, fan-out, composition/sub-loops, conditionals/retries.
+- Editor support — syntax highlighting and inline diagnostics for `.slac.md`.
 
 ## [0.0.1] - 2026-06-18
 

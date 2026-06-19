@@ -12,6 +12,7 @@ import sys
 
 from . import __version__
 from .linter import run as lint_run
+from .runner import run as run_loop
 
 STARTER = """\
 ---
@@ -80,6 +81,17 @@ def cmd_lint(args):
     return lint_run(args.files, as_json=args.json, strict=args.strict)
 
 
+def cmd_run(args):
+    return run_loop(
+        args.file,
+        maker_engine=args.maker_engine,
+        checker_engine=args.checker_engine,
+        max_iter=args.max_iter,
+        permission_mode=args.permission_mode,
+        dry_run=args.dry_run,
+    )
+
+
 def cmd_new(args):
     name = args.name
     if not name.replace("_", "a").isalnum() or not name[0].isalpha() or not name.islower():
@@ -126,6 +138,20 @@ def build_parser():
     pl.add_argument("--json", action="store_true", help="machine-readable findings")
     pl.add_argument("--strict", action="store_true", help="warnings become errors")
     pl.set_defaults(func=cmd_lint)
+
+    pr = sub.add_parser("run", help="execute a loop (maker -> checker -> until)")
+    pr.add_argument("file", help="the .slac.md loop to run")
+    pr.add_argument("--dry-run", action="store_true",
+                    help="show the execution plan and run nothing")
+    pr.add_argument("--max-iter", type=int, default=None,
+                    help="override the loop's max_iterations")
+    pr.add_argument("--maker-engine", default="claude_cli",
+                    help="engine for the maker (default: claude_cli)")
+    pr.add_argument("--checker-engine", default=None,
+                    help="engine for the checker (default: same as maker)")
+    pr.add_argument("--permission-mode", default="default",
+                    help="permission mode passed to the CLI backend")
+    pr.set_defaults(func=cmd_run)
 
     pn = sub.add_parser("new", help="scaffold a starter loop that lints clean")
     pn.add_argument("name", help="snake_case loop name")
