@@ -102,7 +102,16 @@ slac lint --json my_loop.slac.md          # machine-readable findings (agents au
 slac lint --strict examples/*.slac.md     # CI mode: warnings become errors
 slac new my_loop                          # scaffold a starter loop that lints clean
 slac explain NoCheckerWarning             # what a diagnostic means (or list them all)
+slac run my_loop.slac.md --dry-run        # show the execution plan, run nothing
+slac run my_loop.slac.md                  # execute: maker -> separate checker -> until
 ```
+
+`slac run` executes a loop on the **CLI you're already logged into** — by default
+it shells out to `claude` (no API key, no separate billing). It refuses to run a
+loop that doesn't lint clean, runs the maker, then a **separate** checker, evaluates
+`until` over the checker's reported signals, and records each turn in `log.md`. A
+`codex_cli` backend (and running maker/checker on *different* engines at once) is
+next.
 
 Diagnostics read like a **Python traceback**, not a barcode — errors are named
 like Python exceptions (`MissingFieldError`, `UnknownFieldError`, `TypeError`)
