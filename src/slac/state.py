@@ -1,18 +1,20 @@
 """Read and write a loop's on-disk memory (`log.md`).
 
 `log.md` is the OKF-reserved file SLAC uses as the loop's state between runs.
-It is human-readable markdown: one `## Iteration N` section per turn, each
-carrying the signals and a machine-recoverable `consecutive_green` line so a
-later run can resume.
+It is human-readable markdown: one `## Iteration N` section per turn. Each
+section also carries a single machine-readable HTML-comment marker
+(`<!-- slac-state {...} -->`) that `load_state` reads — so agent output that
+happens to contain `## Iteration 999` or `- consecutive_green: 7` can never
+corrupt the recovered counters.
 """
 
 import json
 import os
 import re
 
-_ITER_RE = re.compile(r"(?m)^##\s+Iteration\s+(\d+)\b")
-_CG_RE = re.compile(r"(?m)^- consecutive_green:\s*(\d+)\s*$")
-_SIGNALS_RE = re.compile(r"(?ms)^<!-- signals (\{.*?\}) -->\s*$")
+# The state marker is written by us at the end of each iteration; agent text is
+# written before it, so the LAST marker in the file is always the latest turn.
+_STATE_RE = re.compile(r"<!-- slac-state (.*?) -->", re.DOTALL)
 
 
 def load_state(path):
@@ -22,21 +24,18 @@ def load_state(path):
         return empty
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
-    iters = [int(m.group(1)) for m in _ITER_RE.finditer(text)]
-    iterations = max(iters) if iters else 0
-    cg_matches = _CG_RE.findall(text)
-    consecutive_green = int(cg_matches[-1]) if cg_matches else 0
-    sig_matches = _SIGNALS_RE.findall(text)
-    last_signals = {}
-    if sig_matches:
-        try:
-            last_signals = json.loads(sig_matches[-1])
-        except ValueError:
-            last_signals = {}
+    markers = _STATE_RE.findall(text)
+    if not markers:
+        return empty
+    try:
+        st = json.loads(markers[-1])
+    except ValueError:
+        return empty
+    sig = st.get("signals")
     return {
-        "iterations": iterations,
-        "consecutive_green": consecutive_green,
-        "last_signals": last_signals,
+        "iterations": int(st.get("iteration", 0)),
+        "consecutive_green": int(st.get("consecutive_green", 0)),
+        "last_signals": sig if isinstance(sig, dict) else {},
     }
 
 
@@ -63,6 +62,11 @@ def append_iteration(path, record):
              consecutive_green, elapsed_minutes}
     """
     sig = record.get("signals") or {}
+    marker = json.dumps({
+        "iteration": record["iteration"],
+        "consecutive_green": record.get("consecutive_green", 0),
+        "signals": sig,
+    }, sort_keys=True)
     lines = [
         "## Iteration %d" % record["iteration"],
         "",
@@ -85,8 +89,8 @@ def append_iteration(path, record):
         "```json",
         json.dumps(sig, indent=2, sort_keys=True),
         "```",
-        # Machine-recoverable copy for load_state() (single line).
-        "<!-- signals %s -->" % json.dumps(sig, sort_keys=True),
+        # Machine-recoverable metadata for load_state(), isolated from prose.
+        "<!-- slac-state %s -->" % marker,
         "",
     ]
     with open(path, "a", encoding="utf-8") as f:

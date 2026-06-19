@@ -110,18 +110,26 @@ def _boundaries_text(b):
     return ("\n## Boundaries\n" + "\n".join(rows)) if rows else ""
 
 
-def _maker_prompt(goal, instructions, context_text, boundaries):
+def _memory_text(memory):
+    memory = (memory or "").strip()
+    if not memory:
+        return ""
+    return "\n## Prior attempts (your memory — recent log.md)\n" + memory
+
+
+def _maker_prompt(goal, instructions, context_text, boundaries, memory):
     return "\n".join([
         goal.strip(),
         "\n## Your role: MAKER",
         (instructions or "").strip(),
+        _memory_text(memory),
         "\n## Context (fetched this iteration)",
         context_text or "_(none)_",
         _boundaries_text(boundaries),
     ]).strip()
 
 
-def _checker_prompt(goal, instructions, until, maker_text, boundaries):
+def _checker_prompt(goal, instructions, until, maker_text, boundaries, context_text):
     # Tell the checker the exact dotted paths `until` needs (excluding the
     # runner-filled always-signals) and the nested shape to return them in, so
     # `answer.value` isn't answered with a bare scalar.
@@ -138,6 +146,10 @@ def _checker_prompt(goal, instructions, until, maker_text, boundaries):
         "`%s`" % until,
         "\n## What the maker just did",
         maker_text or "_(no output)_",
+        # Give the checker the SAME fetched inputs the maker saw, so signals
+        # derived from context can be verified first-hand (not via the maker).
+        "\n## Context (the same inputs the maker saw)",
+        context_text or "_(none)_",
         _boundaries_text(boundaries),
         "\n## Required output",
         "Report these exact signal paths: %s" % (", ".join(paths) or "(none)"),
@@ -152,6 +164,25 @@ def _checker_prompt(goal, instructions, until, maker_text, boundaries):
 def _oneline(text, n=140):
     s = " ".join((text or "").split())
     return s if len(s) <= n else s[:n] + "…"
+
+
+def _read_memory(state_path, n=4000):
+    """The recent tail of log.md, injected into the maker prompt as memory.
+
+    Each `claude --print` call is a fresh CLI session, so without this the next
+    iteration can't see what was already tried or why the checker rejected it.
+    """
+    try:
+        with open(state_path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return ""
+    return text[-n:] if len(text) > n else text
+
+
+def _stop(out, detail, state_path):
+    out("\n✗ stopped at %s without meeting `until`. log: %s" % (detail, state_path))
+    return 1
 
 
 # --------------------------------------------------------------------------- #
@@ -194,7 +225,15 @@ def run(path, maker_engine="claude_cli", checker_engine=None, max_iter=None,
     boundaries = fm.get("boundaries") or {}
     context_items = fm.get("context") or []
     state_path = os.path.join(cwd, fm.get("state", "./log.md"))
-    max_iter = max_iter or fm.get("max_iterations", 20)
+    # Honor an explicit --max-iter (even 0); else the loop's value (may be None).
+    if max_iter is None:
+        max_iter = fm.get("max_iterations")
+    budget = fm.get("budget") or {}
+    budget_minutes = budget.get("minutes")
+    budget_tokens = budget.get("tokens")
+    # If the loop declares no cap at all, bound iterations so it can't run forever.
+    if max_iter is None and not budget_minutes and not budget_tokens:
+        max_iter = 20
     roots = signal_roots(until)
 
     maker_engine = maker_cfg.get("engine", maker_engine)
@@ -227,23 +266,35 @@ def run(path, maker_engine="claude_cli", checker_engine=None, max_iter=None,
     start = time.time()
     consecutive_green = st["consecutive_green"]
     iteration = st["iterations"]
+    total_tokens = 0
     expr_until = is_expression(until)
 
-    while iteration < max_iter:
-        iteration += 1
+    while True:
         elapsed = int((time.time() - start) / 60)
+        # Cap checks BEFORE spending another iteration (iteration / minutes / tokens).
+        if max_iter is not None and iteration >= max_iter:
+            return _stop(out, "max_iterations=%s" % max_iter, state_path)
+        if budget_minutes is not None and elapsed >= budget_minutes:
+            return _stop(out, "budget minutes=%s" % budget_minutes, state_path)
+        if budget_tokens is not None and total_tokens >= budget_tokens:
+            return _stop(out, "budget tokens=%s (used %d)" % (budget_tokens, total_tokens),
+                         state_path)
+
+        iteration += 1
         out("\n=== Iteration %d ===" % iteration)
 
         context_text, _ = fetch_context(context_items, cwd)
         out("running maker (%s)…" % maker_engine)
         mres = maker_be.run_agent("maker",
                                   _maker_prompt(goal, maker_cfg.get("instructions"),
-                                                context_text, boundaries),
+                                                context_text, boundaries,
+                                                _read_memory(state_path)),
                                   model=maker_cfg.get("model"),
                                   permission_mode=permission_mode)
         if not mres.ok:
             out("maker failed: %s" % mres.error)
             return 4
+        total_tokens += mres.tokens
         out("  maker: %s" % _oneline(mres.text))
 
         reported, checker_done, checker_text = {}, None, ""
@@ -251,12 +302,14 @@ def run(path, maker_engine="claude_cli", checker_engine=None, max_iter=None,
             out("running checker (%s)…" % checker_engine)
             cres = checker_be.run_agent("checker",
                                         _checker_prompt(goal, checker_cfg.get("instructions"),
-                                                        until, mres.text, boundaries),
+                                                        until, mres.text, boundaries,
+                                                        context_text),
                                         model=checker_cfg.get("model"),
                                         permission_mode=permission_mode)
             if not cres.ok:
                 out("checker failed: %s" % cres.error)
                 return 4
+            total_tokens += cres.tokens
             reported, checker_done, checker_text = dict(cres.signals), cres.done, cres.text
             out("  checker: %s" % _oneline(cres.verdict or cres.text))
 
@@ -276,28 +329,24 @@ def run(path, maker_engine="claude_cli", checker_engine=None, max_iter=None,
         else:
             met, reason = bool(checker_done), "checker verdict"
 
-        stop_reason = "done" if met else ("limit" if iteration >= max_iter else "continue")
         state_mod.append_iteration(state_path, {
             "iteration": iteration, "maker": mres.text, "checker": checker_text,
             "signals": signals, "until": until, "met": met,
             "consecutive_green": consecutive_green, "elapsed_minutes": elapsed,
-            "stop_reason": stop_reason,
+            "stop_reason": "done" if met else "continue",
         })
         out("  → %s (%s)" % ("DONE" if met else "not yet", reason))
         if met:
             out("\n✓ done in %d iteration(s); `until` met. log: %s" % (iteration, state_path))
             return 0
 
-    out("\n✗ stopped at limit (max_iterations=%d) without meeting `until`. log: %s"
-        % (max_iter, state_path))
-    return 1
-
 
 def _print_plan(out, loop, until, roots, context_items, maker_engine,
                 checker_engine, max_iter, budget, has_checker):
     out("Loop:    %s" % loop)
     out("Maker:   %s" % maker_engine)
-    out("Checker: %s" % (checker_engine if has_checker else "(none — maker would grade itself!)"))
+    out("Checker: %s" % (checker_engine if has_checker
+                         else "(none — checker skipped; the maker is UNVERIFIED)"))
     out("Until:   %s" % until)
     out("Signals: %s" % (", ".join(sorted(roots)) if roots else "(prose `until` — checker judges)"))
     out("Caps:    max_iterations=%s%s" % (max_iter, ", budget=%s" % budget if budget else ""))

@@ -52,25 +52,40 @@ class ClaudeCLIBackend(Backend):
                                error="claude exited %d: %s"
                                % (proc.returncode, (proc.stderr or "").strip()[:300]))
 
-        text = _result_text(proc.stdout)
+        text, tokens, cost = _parse_output(proc.stdout)
         contract = _parse_contract(text) if role == "checker" else {}
-        return AgentResult(text=text, contract=contract, raw=proc.stdout)
+        return AgentResult(text=text, contract=contract, raw=proc.stdout,
+                           tokens=tokens, cost=cost)
 
 
-def _result_text(stdout):
-    """Pull the assistant's final text out of `--output-format json` output."""
+_USAGE_KEYS = ("input_tokens", "output_tokens",
+               "cache_creation_input_tokens", "cache_read_input_tokens")
+
+
+def _parse_output(stdout):
+    """Return (text, tokens, cost) from `--output-format json` output.
+
+    The CLI emits a JSON array of stream events whose final `result` event holds
+    the assistant text plus `usage`/`total_cost_usd`.
+    """
     stdout = (stdout or "").strip()
     try:
         data = json.loads(stdout)
-        if isinstance(data, dict):
-            return data.get("result") or data.get("text") or stdout
-        if isinstance(data, list) and data:  # stream-json fallback
-            last = data[-1]
-            if isinstance(last, dict):
-                return last.get("result") or stdout
     except ValueError:
-        pass
-    return stdout
+        return stdout, 0, 0.0
+    events = data if isinstance(data, list) else [data]
+    text, tokens, cost = stdout, 0, 0.0
+    for ev in reversed(events):
+        if isinstance(ev, dict) and ("result" in ev or ev.get("type") == "result"):
+            text = ev.get("result") or ev.get("text") or stdout
+            usage = ev.get("usage") or {}
+            tokens = sum(int(usage.get(k, 0) or 0) for k in _USAGE_KEYS)
+            try:
+                cost = float(ev.get("total_cost_usd") or 0.0)
+            except (TypeError, ValueError):
+                cost = 0.0
+            break
+    return text, tokens, cost
 
 
 def _parse_contract(text):

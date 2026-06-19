@@ -17,10 +17,16 @@ class AgentResult:
     raw: str = ""
     ok: bool = True
     error: str = ""
+    tokens: int = 0
+    cost: float = 0.0
 
     @property
     def signals(self):
-        return self.contract.get("signals", {}) if isinstance(self.contract, dict) else {}
+        if not isinstance(self.contract, dict):
+            return {}
+        sig = self.contract.get("signals", {})
+        # The checker may report a non-object here; never let it crash the runner.
+        return sig if isinstance(sig, dict) else {}
 
     @property
     def done(self):

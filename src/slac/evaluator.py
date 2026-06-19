@@ -113,8 +113,10 @@ def evaluate_until(expr, signals):
         code = compile(tree, "<until>", "eval")
         result = bool(eval(code, {"__builtins__": {}}, namespace))  # noqa: S307
         return result, ("until met" if result else "until not yet met")
-    except (NameError, AttributeError) as e:
-        # A signal named in `until` wasn't reported by the checker this turn.
+    except (NameError, AttributeError, TypeError, ValueError) as e:
+        # Either a signal named in `until` wasn't reported this turn (Name/Attr),
+        # or the checker reported an incompatible type (e.g. "5" vs 5 → TypeError).
+        # Both are recoverable: treat as "not yet met" rather than crashing the loop.
         return False, "waiting on signal (%s)" % e
 
 

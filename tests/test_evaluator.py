@@ -73,6 +73,12 @@ class EvaluateUntil(unittest.TestCase):
         self.assertFalse(met)
         self.assertIn("signal", reason)
 
+    def test_type_mismatch_does_not_crash(self):
+        # "5" >= 1 raises TypeError in py3; must be recoverable, not fatal.
+        met, reason = evaluate_until("tests.passed >= 1", {"tests": {"passed": "5"}})
+        self.assertFalse(met)
+        self.assertIn("waiting", reason)
+
     def test_prose_raises(self):
         with self.assertRaises(UntilError):
             evaluate_until("the bug no longer reproduces", {})

@@ -36,6 +36,14 @@ class DryRun(unittest.TestCase):
         self.assertIn("dry run", joined)
 
 
+class ExplicitMaxIterZero(unittest.TestCase):
+    def test_max_iter_zero_is_honored(self):
+        # `--max-iter 0` must override the frontmatter default (not fall back via `or`).
+        lines = []
+        runner.run(EXAMPLE, max_iter=0, dry_run=True, out=lines.append)
+        self.assertIn("max_iterations=0", "\n".join(lines))
+
+
 class PreflightGate(unittest.TestCase):
     def test_refuses_invalid_loop(self):
         d = tempfile.mkdtemp()
